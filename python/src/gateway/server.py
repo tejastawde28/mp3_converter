@@ -96,8 +96,8 @@ def download():
 def verify_connections():
     # Verify MongoDB
     try:
-        test_id = fs.put(b"startup_test")
-        fs.delete(test_id)
+        test_id = fs_videos.put(b"startup_test")
+        fs_videos.delete(test_id)
         print("MongoDB connection verified")
     except Exception as e:
         print(f"MongoDB connection failed: {e}")
