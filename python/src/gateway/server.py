@@ -14,8 +14,15 @@ mongo_mp3 = PyMongo(server, uri="mongodb://host.minikube.internal:27017/mp3s")
 fs_videos = gridfs.GridFS(mongo_video.db)
 fs_mp3s = gridfs.GridFS(mongo_mp3.db)
 
-connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
-channel = connection.channel()
+connection = None
+channel = None
+
+def get_rabbitmq_channel():
+    global connection, channel
+    if not connection or connection.is_closed:
+        connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
+        channel = connection.channel()
+    return channel
 
 @server.route("/login", methods=["POST"])
 def login():
@@ -61,6 +68,7 @@ def upload():
     
     # Upload file
     for _, f in request.files.items():
+        channel = get_rabbitmq_channel()
         err = util.upload(f, fs_videos, channel, access)
         if err:
             print(f"Upload utility error: {err}")
