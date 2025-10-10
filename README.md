@@ -1,19 +1,21 @@
 # Video to MP3 Converter Python Microservices
 
-A distributed microservice application that converts video files to MP3 format using Python Flask, Docker, Kubernetes, RabbitMQ, MongoDB, and MySQL.
+A distributed microservice application that converts video files to MP3 format using Python Flask, Docker, Kubernetes, RabbitMQ, MongoDB, and MySQL. Features include user authentication with signup/login functionality.
 
 ## Architecture Overview
 
 ```
-Client → Gateway → MongoDB (video storage)
-                ↓
-            RabbitMQ (video queue)
-                ↓
-            Converter Service → MongoDB (mp3 storage)
-                ↓
-            RabbitMQ (mp3 queue)
-                ↓
-            Notification Service → Email to Client
+Client → Gateway → Auth Service (signup/login)
+              ↓
+           MongoDB (video storage)
+              ↓
+          RabbitMQ (video queue)
+              ↓
+          Converter Service → MongoDB (mp3 storage)
+              ↓
+          RabbitMQ (mp3 queue)
+              ↓
+          Notification Service → Email to Client
 ```
 
 ## Prerequisites
@@ -195,29 +197,74 @@ kubectl apply -f python/src/notification/manifests/
 
 ## Usage
 
-### 1. Login
+### 1. Create Account (Signup)
+```bash
+curl -X POST http://mp3converter.com/signup \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "email=newuser@example.com&password=mypassword123"
+```
+**Response**: `user created successfully`
+
+**Requirements:**
+- Email must be valid format (contain @ and .)
+- Password must be at least 6 characters
+- Email must be unique (not already registered)
+
+### 2. Login
 ```bash
 curl -X POST http://mp3converter.com/login \
   -u <email>:<password>
 ```
 Save/copy the returned JWT token.
 
-### 2. Upload Video
+**Note**: You can login with either:
+- The test user: `tejas@email.com` / `Admin123`
+- Any user you created via signup
+
+### 3. Upload Video
 ```bash
 curl -X POST http://mp3converter.com/upload \
   -F "file=@your_video.mp4" \
   -H "Authorization: Bearer <JWT_TOKEN>"
 ```
 
-### 3. Check Email
+### 4. Check Email
 You'll receive an email with the MP3 file ID.
 
-### 4. Download MP3
+### 5. Download MP3
 ```bash
 curl -X GET "http://mp3converter.com/download?fid=<FILE_ID>" \
   -H "Authorization: Bearer <JWT_TOKEN>" \
   -o output.mp3
 ```
+
+## Authentication Features
+
+### User Registration (Signup)
+- **Endpoint**: `POST /signup`
+- **Content-Type**: `application/x-www-form-urlencoded`
+- **Required Fields**: `email`, `password`
+- **Validation**:
+  - Email format validation (must contain @ and .)
+  - Password minimum length (6 characters)
+  - Email uniqueness check
+- **Password Security**: Passwords are hashed using SHA256 before storage
+
+### User Login
+- **Endpoint**: `POST /login`
+- **Authentication**: HTTP Basic Auth
+- **Returns**: JWT token for authenticated sessions
+- **Token Expiry**: 24 hours
+
+### Error Responses
+| Status | Message | Description |
+|--------|---------|-------------|
+| 400 | `email and password are required` | Missing required fields |
+| 400 | `invalid email format` | Email doesn't contain @ or . |
+| 400 | `password must be at least 6 characters long` | Password too short |
+| 409 | `user already exists` | Email already registered |
+| 401 | `invalid credentials` | Wrong email/password |
+| 500 | `internal server error` | Server error occurred |
 
 ## Project Structure
 
