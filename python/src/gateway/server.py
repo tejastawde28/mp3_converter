@@ -1,4 +1,4 @@
-import os, gridfs, pika, json
+import os, gridfs, pika, json, time
 from flask import Flask, request, send_file
 from flask_pymongo import PyMongo
 from auth import validate
@@ -20,8 +20,25 @@ channel = None
 def get_rabbitmq_channel():
     global connection, channel
     if not connection or connection.is_closed:
-        connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
-        channel = connection.channel()
+        max_retries = 5
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
+                channel = connection.channel()
+                channel.queue_declare(queue='video', durable=True)
+                print("Connected to RabbitMQ")
+                return channel
+            except Exception as e:
+                print(f"Failed to connect to RabbitMQ (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    print("Max retries reached. RabbitMQ connection failed.")
+                    return None
     return channel
 
 @server.route("/login", methods=["POST"])
@@ -77,11 +94,34 @@ def upload():
     
     # Upload file
     for _, f in request.files.items():
-        channel = get_rabbitmq_channel()
-        err = util.upload(f, fs_videos, channel, access)
-        if err:
-            print(f"Upload utility error: {err}")
-            return err
+        max_upload_retries = 3
+        upload_retry_delay = 1
+        
+        for upload_attempt in range(max_upload_retries):
+            channel = get_rabbitmq_channel()
+            if channel:
+                err = util.upload(f, fs_videos, channel, access)
+                if not err:
+                    print("Upload successful")
+                    break
+                else:
+                    print(f"Upload utility error (attempt {upload_attempt + 1}): {err}")
+                    if upload_attempt < max_upload_retries - 1:
+                        print(f"Retrying upload in {upload_retry_delay} seconds...")
+                        time.sleep(upload_retry_delay)
+                        upload_retry_delay *= 2
+                    else:
+                        print("Max upload retries reached")
+                        return "upload failed, please try again", 400
+            else:
+                print(f"RabbitMQ not ready (attempt {upload_attempt + 1})")
+                if upload_attempt < max_upload_retries - 1:
+                    print(f"Retrying upload in {upload_retry_delay} seconds...")
+                    time.sleep(upload_retry_delay)
+                    upload_retry_delay *= 2
+                else:
+                    print("Max upload retries reached - RabbitMQ unavailable")
+                    return "upload failed, please try again", 400
     
     return "success!", 200
     
@@ -118,13 +158,6 @@ def verify_connections():
         print("MongoDB connection verified")
     except Exception as e:
         print(f"MongoDB connection failed: {e}")
-        
-    # Verify RabbitMQ
-    try:
-        channel.queue_declare(queue='video', durable=True)
-        print("RabbitMQ connection verified")
-    except Exception as e:
-        print(f"RabbitMQ connection failed: {e}")
 
 if __name__ == "__main__":
     verify_connections()
