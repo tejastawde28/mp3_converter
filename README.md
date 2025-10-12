@@ -352,4 +352,4 @@ brew services stop mysql
 ```
 
 ## Credits
-This project is based on the [microservice architecture tutorial](https://www.youtube.com/watch?v=hmkF77F9TLw) by freeCodeCamp and [@kantancoding](@kantancoding).
+This project is based on the [microservice architecture tutorial](https://www.youtube.com/watch?v=hmkF77F9TLw) by freeCodeCamp and [@kantancoding](https://github.com/kantancoding).
