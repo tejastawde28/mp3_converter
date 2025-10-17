@@ -75,55 +75,20 @@ def upload():
         return "not authorized", 401
     
     # Try to parse JSON with error handling
-    try:
-        access = json.loads(access)
-        print(f"Parsed access: {access}")  # Debug print
-    except json.JSONDecodeError as e:
-        print(f"JSON decode error: {e}")
-        print(f"Raw access string: {access}")
-        return "invalid token format", 500
     
-    # Check admin status
-    if not access.get("admin", False):
-        print(f"User {access.get('username')} is not admin")
-        return "not authorized", 401
-    
-    # File validation
-    if len(request.files) != 1:
-        return "exactly 1 file required", 400
-    
-    # Upload file
-    for _, f in request.files.items():
-        max_upload_retries = 3
-        upload_retry_delay = 1
+    access = json.loads(access)
+    if access["admin"]:
+        if len(request.files) > 1 or len(request.files) < 1:
+            return "exactly one file required", 400
         
-        for upload_attempt in range(max_upload_retries):
+        for _, f in request.files.items():
             channel = get_rabbitmq_channel()
-            if channel:
-                err = util.upload(f, fs_videos, channel, access)
-                if not err:
-                    print("Upload successful")
-                    break
-                else:
-                    print(f"Upload utility error (attempt {upload_attempt + 1}): {err}")
-                    if upload_attempt < max_upload_retries - 1:
-                        print(f"Retrying upload in {upload_retry_delay} seconds...")
-                        time.sleep(upload_retry_delay)
-                        upload_retry_delay *= 2
-                    else:
-                        print("Max upload retries reached")
-                        return "upload failed, please try again", 400
-            else:
-                print(f"RabbitMQ not ready (attempt {upload_attempt + 1})")
-                if upload_attempt < max_upload_retries - 1:
-                    print(f"Retrying upload in {upload_retry_delay} seconds...")
-                    time.sleep(upload_retry_delay)
-                    upload_retry_delay *= 2
-                else:
-                    print("Max upload retries reached - RabbitMQ unavailable")
-                    return "upload failed, please try again", 400
-    
-    return "success!", 200
+            err = util.upload(f, fs_videos, channel, access)
+            if err:
+                return err
+        return "success!", 200
+    else:
+        return "not authorized", 401
     
 @server.route("/download", methods=["GET"])
 def download():
